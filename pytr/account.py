@@ -47,17 +47,8 @@ def login(phone_no=None, pin=None, web=True):
             print('Please enter your TradeRepublic pin:')
             pin = input()
 
-        print('Save credentials? Type "y" to save credentials:')
-        save = input()
-        if save == 'y':
-            with open(CREDENTIALS_FILE, 'w') as f:
-                f.writelines([phone_no + '\n', pin + '\n'])
+        save_cookies = False
 
-            log.info(f'Saved credentials in {CREDENTIALS_FILE}')
-
-        else:
-            save_cookies = False
-            log.info('Credentials not saved')
 
     tr = TradeRepublicApi(phone_no=phone_no, pin=pin, save_cookies=save_cookies)
 
