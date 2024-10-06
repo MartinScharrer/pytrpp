@@ -16,7 +16,7 @@ def get_settings(tr):
         return formatted_json
 
 
-def login(phone_no=None, pin=None, web=True):
+def login(phone_no=None, pin=None, web=True, cookies_file=None):
     '''
     If web is true, use web login method as else simulate app login.
     Check if credentials file exists else create it.
@@ -47,10 +47,10 @@ def login(phone_no=None, pin=None, web=True):
             print('Please enter your TradeRepublic pin:')
             pin = input()
 
-        save_cookies = False
+        # save_cookies = False
 
 
-    tr = TradeRepublicApi(phone_no=phone_no, pin=pin, save_cookies=save_cookies)
+    tr = TradeRepublicApi(phone_no=phone_no, pin=pin, save_cookies=save_cookies, cookies_file=cookies_file)
 
     if web:
         # Use same login as app.traderepublic.com

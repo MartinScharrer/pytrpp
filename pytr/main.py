@@ -57,6 +57,8 @@ def get_main_parser():
     )
     parser.add_argument('--universal', help='Platform independent file names', action='store_true')
 
+    parser.add_argument('--cookies_file', help='Cookies file')
+
     return parser
 
 
@@ -69,7 +71,7 @@ def main(argv=None):
     log.debug('logging is set to debug')
 
     dl = DL(
-        login(phone_no=args.phone_no, pin=args.pin, web=not args.applogin),
+        login(phone_no=args.phone_no, pin=args.pin, web=not args.applogin, cookies_file=args.cookies_file),
         args.output,
         args.format,
         since_timestamp=0,
