@@ -7,8 +7,20 @@ import requests
 from datetime import datetime
 from locale import getdefaultlocale
 from packaging import version
-
+from pathlib import Path
+from string import capwords
 log_level = None
+
+
+def timestamp(ts: str) -> datetime:
+    """Convert string timestamp to datetime object."""
+    try:
+        return datetime.fromisoformat(ts)
+    except ValueError:
+        try:
+            return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%f%z")
+        except ValueError:
+            return datetime.fromisoformat(ts[:19])
 
 
 def get_logger(name=__name__, verbosity=None):
@@ -190,6 +202,8 @@ class Timeline:
         event = self.timeline_events[response['id']]
         event['details'] = response
 
+        dt = timestamp(event['timestamp'])
+
         # when all requested timeline events are received request 5 new
         if self.received_detail == self.requested_detail:
             remaining = len(self.timeline_events)
@@ -213,8 +227,9 @@ class Timeline:
                         extension = url[url.rindex('.')-1:]
                     except (IndexError, ValueError):
                         extension = ''
-
-                    dl.dl_doc(doc_url=doc['action']['payload'], filepath=doc['id'] + extension)
+                    filepath = f"{doc['title']} - {dt:%Y-%m-%d} - {doc['id']}{extension}"
+                    doc['action']['localpath'] = str(filepath)
+                    dl.dl_doc(doc_url=doc_url, filepath=filepath, subfolder=capwords(event['eventType'], '_'))
 
         if self.received_detail == self.num_timeline_details:
             self.log.info('Received all details')
