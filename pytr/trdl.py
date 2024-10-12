@@ -1,8 +1,9 @@
 import re
 
 from pathlib import Path
-from requests_futures.sessions import FuturesSession
+from concurrent.futures import as_completed, Future
 from requests import session
+from requests_futures.sessions import FuturesSession
 import json
 import asyncio
 
@@ -189,3 +190,31 @@ class Timeline:
         if not self.done:
             asyncio.get_event_loop().run_until_complete(self.dl_loop())
         return self.events
+
+
+class Downloader:
+    def __init__(self, headers: dict[str, str|bytes], max_workers=8):
+        self.futures: list[Future] = []
+        self.errors: int = 0
+        requests_session = session()
+        requests_session.headers = headers
+        self.session = FuturesSession(max_workers=max_workers, session=requests_session)
+
+    def dl(self, url: str, filepath: Path|str, redownload: bool = False):
+        filepath = Path(filepath)
+        if not filepath.exists() or redownload:
+            future = self.session.get(url)
+            future.filepath = filepath
+            self.futures.append(future)
+
+    def wait(self):
+        for future in as_completed(self.futures):
+            filepath: Path = future.filepath
+
+            try:
+                result = future.result()
+            except Exception as e:
+                self.errors += 1
+            else:
+                filepath.parent.mkdir(parents=True, exist_ok=True)
+                filepath.write_bytes(result.content)
