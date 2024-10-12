@@ -2,13 +2,16 @@
 
 import argparse
 import asyncio
+import json
+
 import shtab
 from pathlib import Path
 
 from utils import get_logger
-from dl import DL
+from trdl import Timeline
 from account import login
-
+from datetime import datetime, timedelta, timezone
+from conv import conv
 
 def get_main_parser():
     def formatter(prog):
@@ -44,20 +47,18 @@ def get_main_parser():
 
     parser.add_argument('output', help='Output directory', metavar='PATH', type=Path)
     parser.add_argument(
-        '--format',
-        help='available variables:\tiso_date, time, title, doc_num, subtitle, id',
-        metavar='FORMAT_STRING',
-        default='{iso_date}{time} {title}{doc_num}',
-    )
-    parser.add_argument(
-        '--last_days', help='Number of last days to include (use 0 get all days)', metavar='DAYS', default=0, type=int
+        '--last-days', help='Number of last days to include (use 0 get all days)', metavar='DAYS', default=0, type=int
     )
     parser.add_argument(
         '--workers', help='Number of workers for parallel downloading', metavar='WORKERS', default=8, type=int
     )
-    parser.add_argument('--universal', help='Platform independent file names', action='store_true')
 
-    parser.add_argument('--cookies_file', help='Cookies file')
+    parser.add_argument('--cookies-file', help='Cookies file')
+    parser.add_argument('--credentials-file', help='Credential file')
+    parser.add_argument('--locale', help='Locale setting (e.g. "en" for English, "de" for German)', default='de', type=str)
+    parser.add_argument('--events-file', help='Events file to store')
+    parser.add_argument('--payments-file', help='Payments file to store')
+    parser.add_argument('--orders-file', help='Orders file to store')
 
     return parser
 
@@ -70,15 +71,30 @@ def main(argv=None):
     log.setLevel(args.verbosity.upper())
     log.debug('logging is set to debug')
 
-    dl = DL(
-        login(phone_no=args.phone_no, pin=args.pin, web=not args.applogin, cookies_file=args.cookies_file),
-        args.output,
-        args.format,
-        since_timestamp=0,
+    if args.last_days:
+        since_timestamp = datetime.now(timezone.utc) - timedelta(days=args.last_days)
+    else:
+        since_timestamp = 0
+
+    tr = login(phone_no=args.phone_no, pin=args.pin, web=not args.applogin, locale=args.locale,
+               credentials_file=args.credentials_file, cookies_file=args.cookies_file)
+
+    tl = Timeline(
+        tr=tr,
+        since_timestamp=since_timestamp,
         max_workers=args.workers,
-        universal_filepath=args.universal,
     )
-    asyncio.get_event_loop().run_until_complete(dl.dl_loop())
+    events = tl.get_events()
+
+    if args.payments_file or args.orders_file:
+        conv(events, args.payments_file, args.orders_file)
+
+    if args.events_file:
+        log.info(f"Writing events to '{args.events_file}'.")
+        with open(args.events_file, 'w') as fh:
+            json.dump(events, fh, indent=2)
+
+    pass
 
 
 if __name__ == '__main__':

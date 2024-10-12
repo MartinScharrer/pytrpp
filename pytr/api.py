@@ -90,6 +90,8 @@ class TradeRepublicApi:
         self._credentials_file = pathlib.Path(credentials_file) if credentials_file else CREDENTIALS_FILE
         self._cookies_file = pathlib.Path(cookies_file) if cookies_file else COOKIES_FILE
 
+        self._cookies_file.parent.mkdir(exist_ok=True)
+
         if not (phone_no and pin):
             try:
                 with open(self._credentials_file, 'r') as f:
@@ -101,8 +103,6 @@ class TradeRepublicApi:
         else:
             self.phone_no = phone_no
             self.pin = pin
-
-
 
         self.keyfile = keyfile if keyfile else KEY_FILE
         try:

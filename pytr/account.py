@@ -2,6 +2,7 @@ import json
 import sys
 from pygments import highlight, lexers, formatters
 import time
+from pathlib import Path
 
 from api import TradeRepublicApi, CREDENTIALS_FILE
 from utils import get_logger
@@ -16,41 +17,39 @@ def get_settings(tr):
         return formatted_json
 
 
-def login(phone_no=None, pin=None, web=True, cookies_file=None):
+def credentials(phone_no: str|None = None, pin: str|None = None, credentials_file: Path|str|None = None, store_file: bool = True) -> tuple[str, str]:
+    """Process credentials to and from file if required"""
+    write_required: bool = False
+    # Read missing data from credential file
+    if phone_no is None or pin is None:
+        if credentials_file is None:
+            raise ValueError
+        lines = Path(credentials_file).read_text().splitlines()
+        if phone_no is None:
+            phone_no = lines[0].strip()
+        else:
+            write_required = True
+        if pin is None:
+            pin = lines[1].strip()
+        else:
+            write_required = True
+
+    # store if any new information was given
+    if write_required and store_file and credentials_file is not None:
+        Path(credentials_file).write_text(f'{phone_no}\n{pin}\n')
+
+    return phone_no, pin
+
+
+def login(phone_no=None, pin=None, web=True, locale='de', save_cookies=True, credentials_file = None, cookies_file = None):
     '''
     If web is true, use web login method as else simulate app login.
     Check if credentials file exists else create it.
     If no parameters are set but are needed then ask for input
     '''
     log = get_logger(__name__)
-    save_cookies = True
-
-    if phone_no is None and CREDENTIALS_FILE.is_file():
-        log.info('Found credentials file')
-        with open(CREDENTIALS_FILE) as f:
-            lines = f.readlines()
-        phone_no = lines[0].strip()
-        pin = lines[1].strip()
-        phone_no_masked = phone_no[:-8] + '********'
-        pin_masked = len(pin) * '*'
-        log.info(f'Phone: {phone_no_masked}, PIN: {pin_masked}')
-    else:
-        CREDENTIALS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        if phone_no is None:
-            log.info('Credentials file not found')
-            print('Please enter your TradeRepublic phone number in the format +4912345678:')
-            phone_no = input()
-        else:
-            log.info('Phone number provided as argument')
-
-        if pin is None:
-            print('Please enter your TradeRepublic pin:')
-            pin = input()
-
-        # save_cookies = False
-
-
-    tr = TradeRepublicApi(phone_no=phone_no, pin=pin, save_cookies=save_cookies, cookies_file=cookies_file)
+    tr = TradeRepublicApi(phone_no=phone_no, pin=pin, locale=locale, save_cookies=save_cookies,
+                          cookies_file=cookies_file, credentials_file=credentials_file)
 
     if web:
         # Use same login as app.traderepublic.com

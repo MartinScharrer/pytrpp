@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime
 from decimal import Decimal, Context
 from typing import Callable, Any
+from pathlib import Path
 
 RE_ISIN = re.compile(r"^[A-Z]{2}-?[\dA-Z]{9}-?\d$")
 
@@ -420,6 +421,10 @@ class CardWithdrawal(CardTransaction):
     type = 'Entnahme'
     note = 'Geldautomat'
 
+    def __init__(self, event: dict):
+        super().__init__(event)
+        self.note += f" {event['subtitle']}"
+
 
 class CardOrderBilled(Payment):
     type = 'Gebühren'
@@ -470,6 +475,8 @@ event_types: dict[str, Callable[[dict], Any]] = {
     # Card
     'card_successful_transaction': CardTransaction,
     'card_failed_transaction': Ignore,
+    'card_failed_atm_withdrawal': Ignore,
+    'card_failed_verification': Ignore,
     # Card related orders
     'benefits_spare_change_execution': RoundUp,
     'benefits_saveback_execution': SaveBack,
@@ -501,10 +508,9 @@ event_types: dict[str, Callable[[dict], Any]] = {
 }
 
 
-def process(filename):
-    jd = load(filename)
+def process(events: dict):
     data = []
-    for event in jd:
+    for event in events:
         func = event_types.get(event['eventType'], Unknown)
         ev = func(event)
         if isinstance(ev, Unknown):
@@ -514,26 +520,33 @@ def process(filename):
     return data
 
 
+def conv(events: dict, payments_file: None|str|Path, orders_file: None|str|Path):
+    processed = process(events)
+
+    if payments_file:
+        with open(payments_file, 'w', encoding='utf-8') as fh:
+            fh.write(Payment.csv_header())
+            for p in processed:
+                if isinstance(p, Payment):
+                    fh.write(p.csv())
+
+    if orders_file:
+        with open(orders_file, 'w', encoding='utf-8') as fh:
+            fh.write(Investment.csv_header())
+            for p in processed:
+                if isinstance(p, Investment):
+                    fh.write(p.csv())
+
+
 def main():
     import sys
     from pathlib import Path
     filename = sys.argv[1]
-    processed = process(filename)
+    with open(filename, 'rt', encoding='utf-8') as fh:
+        events = json.load(fh)
     basedir = Path(filename).parent
+    conv(events, basedir / 'payments.csv', basedir / 'orders.csv')
 
-    with open(basedir/'payments.csv', 'w', encoding='utf-8') as fh:
-        fh.write(Payment.csv_header())
-        for p in processed:
-            if isinstance(p, Payment):
-                fh.write(p.csv())
-
-    with open(basedir/'orders.csv', 'w', encoding='utf-8') as fh:
-        fh.write(Investment.csv_header())
-        for p in processed:
-            if isinstance(p, Investment):
-                fh.write(p.csv())
-
-    # pprint.pprint(processed)
 
 
 if __name__ == '__main__':
