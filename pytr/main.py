@@ -48,7 +48,7 @@ def get_main_parser():
 
     parser.add_argument('output', help='Output directory', metavar='PATH', type=Path)
     parser.add_argument(
-        '--last-days', help='Number of last days to include (use 0 get all days)', metavar='DAYS', default=0, type=int
+        '--last-days', help='Number of last days to include (use 0 get all days)', metavar='DAYS', default=None, type=int
     )
     parser.add_argument(
         '--workers', help='Number of workers for parallel downloading', metavar='WORKERS', default=8, type=int
@@ -73,10 +73,10 @@ def main(argv=None):
     log.setLevel(args.verbosity.upper())
     log.debug('logging is set to debug')
 
-    if args.last_days:
-        since_timestamp = datetime.now(timezone.utc) - timedelta(days=args.last_days)
+    if args.last_days is not None:
+        since_timestamp = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=args.last_days)
     else:
-        since_timestamp = 0
+        since_timestamp = None
 
     tr = login(phone_no=args.phone_no, pin=args.pin, web=not args.applogin, locale=args.locale,
                credentials_file=args.credentials_file, cookies_file=args.cookies_file)
@@ -104,7 +104,6 @@ def main(argv=None):
         with open(args.events_file, 'w') as fh:
             json.dump(events, fh, indent=2)
 
-    pass
 
 
 def process_dl(events: dict, base_dir: Path, dl: callable):

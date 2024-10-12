@@ -6,15 +6,26 @@ from requests import session
 from requests_futures.sessions import FuturesSession
 import json
 import asyncio
+from datetime import datetime, timezone
 
 from pathvalidate import sanitize_filepath
 
 from utils import get_logger
 from api import TradeRepublicError
 
+def get_timestamp(ts: str) -> datetime:
+    """Convert string timestamp to datetime object."""
+    try:
+        return datetime.fromisoformat(ts)
+    except ValueError:
+        try:
+            return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%f%z")
+        except ValueError:
+            return datetime.fromisoformat(ts[:19])
+
 
 class Timeline:
-    def __init__(self, tr, since_timestamp=0, max_workers=8):
+    def __init__(self, tr, since_timestamp=None, max_workers=8):
         self.tr = tr
         self.log = get_logger(__name__)
         self.errors = 0
@@ -26,7 +37,7 @@ class Timeline:
         self.timeline_events = {}
         self.timeline_events_iter = None
         self.done = False
-        self.since_timestamp = since_timestamp
+        self.since_timestamp = since_timestamp if since_timestamp is not None else datetime.fromtimestamp(0, timezone.utc)
 
         requests_session = session()
         if self.tr._weblogin:
@@ -35,7 +46,7 @@ class Timeline:
             requests_session.headers = self.tr._default_headers
         self.session = FuturesSession(max_workers=max_workers, session=requests_session)
 
-    async def get_next_timeline_transactions(self, response=None, max_age_timestamp=0):
+    async def get_next_timeline_transactions(self, response=None):
         '''
         Get timelines transactions and save time in list timelines.
         Extract timeline transactions events and save them in list timeline_events
@@ -47,16 +58,17 @@ class Timeline:
             self.num_timelines = 0
             await self.tr.timeline_transactions()
         else:
-            timestamp = response['items'][-1]['timestamp']
             self.num_timelines += 1
             # print(json.dumps(response))
-            self.num_timeline_details += len(response['items'])
             for event in response['items']:
-                event['source'] = "timelineTransaction"
-                self.timeline_events[event['id']] = event
+                if get_timestamp(event['timestamp']) >= self.since_timestamp:
+                    event['source'] = "timelineTransaction"
+                    self.timeline_events[event['id']] = event
+                    self.num_timeline_details += 1
 
             after = response['cursors'].get('after')
-            if after is None:
+            timestamp = get_timestamp(response['items'][-1]['timestamp'])
+            if after is None or timestamp < self.since_timestamp:
                 # last timeline is reached
                 await self.get_next_timeline_activity_log()
             else:
@@ -65,7 +77,7 @@ class Timeline:
                 )
                 await self.tr.timeline_transactions(after)
 
-    async def get_next_timeline_activity_log(self, response=None, max_age_timestamp=0):
+    async def get_next_timeline_activity_log(self, response=None):
         '''
         Get timelines acvtivity log and save time in list timelines.
         Extract timeline acvtivity log events and save them in list timeline_events
@@ -77,14 +89,15 @@ class Timeline:
             self.num_timelines = 0
             await self.tr.timeline_activity_log()
         else:
-            timestamp = response['items'][-1]['timestamp']
+            timestamp = get_timestamp(response['items'][-1]['timestamp'])
             self.num_timelines += 1
             # print(json.dumps(response))
-            self.num_timeline_details += len(response['items'])
             for event in response['items']:
                 if event['id'] not in self.timeline_events:
-                    event['source'] = "timelineActivity"
-                    self.timeline_events[event['id']] = event
+                    if get_timestamp(event['timestamp']) < self.since_timestamp:
+                        event['source'] = "timelineActivity"
+                        self.timeline_events[event['id']] = event
+                        self.num_timeline_details += 1
 
             after = response['cursors'].get('after')
             if after is None:
@@ -92,18 +105,18 @@ class Timeline:
                 self.log.info(f'Received #{self.num_timelines:<2} (last) timeline activity log')
                 self.timeline_events_iter = iter(self.timeline_events.values())
                 await self._get_timeline_details(5)
-            elif max_age_timestamp != 0 and timestamp < max_age_timestamp:
+            elif timestamp < self.since_timestamp:
                 self.log.info(f'Received #{self.num_timelines+1:<2} timeline activity log')
                 self.log.info('Reached last relevant timeline activity log')
                 self.timeline_events_iter = iter(self.timeline_events.values())
-                await self._get_timeline_details(5, max_age_timestamp=max_age_timestamp)
+                await self._get_timeline_details(5)
             else:
                 self.log.info(
                     f'Received #{self.num_timelines:<2} timeline activity log, awaiting #{self.num_timelines+1:<2} timeline activity log'
                 )
                 await self.tr.timeline_activity_log(after)
 
-    async def _get_timeline_details(self, num_torequest, max_age_timestamp=0):
+    async def _get_timeline_details(self, num_torequest):
         '''
         request timeline details
         '''
@@ -118,9 +131,8 @@ class Timeline:
             action = event.get('action')
             # icon = event.get('icon')
             msg = ''
-            if max_age_timestamp != 0 and event['timestamp'] > max_age_timestamp:
+            if get_timestamp(event['timestamp']) < self.since_timestamp:
                 msg += 'Skip: too old'
-
             elif action is None:
                 if event.get('actionLabel') is None:
                     msg += 'Skip: no action'
@@ -129,17 +141,17 @@ class Timeline:
             elif action.get('payload') != event['id']:
                 msg += f"Skip: payload unmatched ({action['payload']})"
 
-            self.events.append(event)
             if msg != '':
                 self.log.debug(f"{msg} {event['title']}: {event.get('body')} {json.dumps(event)}")
                 self.num_timeline_details -= 1
                 continue
 
+            self.events.append(event)
             num_torequest -= 1
             self.requested_detail += 1
             await self.tr.timeline_detail_v2(event['id'])
 
-    async def timelineDetail(self, response, dl, max_age_timestamp=0):
+    async def timelineDetail(self, response, dl):
         '''
         process timeline response and request timelines
         '''
@@ -166,7 +178,7 @@ class Timeline:
             self.done = True
 
     async def dl_loop(self):
-        await self.get_next_timeline_transactions(max_age_timestamp=self.since_timestamp)
+        await self.get_next_timeline_transactions()
 
         while not self.done:
             try:
@@ -178,11 +190,11 @@ class Timeline:
                 continue
 
             if subscription['type'] == 'timelineTransactions':
-                await self.get_next_timeline_transactions(response, max_age_timestamp=self.since_timestamp)
+                await self.get_next_timeline_transactions(response)
             elif subscription['type'] == 'timelineActivityLog':
-                await self.get_next_timeline_activity_log(response, max_age_timestamp=self.since_timestamp)
+                await self.get_next_timeline_activity_log(response)
             elif subscription['type'] == 'timelineDetailV2':
-                await self.timelineDetail(response, self, max_age_timestamp=self.since_timestamp)
+                await self.timelineDetail(response, self)
             else:
                 self.log.warning(f"unmatched subscription of type '{subscription['type']}'")
 
