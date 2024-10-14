@@ -1,131 +1,277 @@
 #!/usr/bin/env python
 
 import argparse
-import asyncio
-import json
-
-import shtab
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from utils import get_logger
-from trdl import Timeline, Downloader
-from account import login
-from datetime import datetime, timedelta, timezone
-from conv import conv, timestamp
+from trdl import Timeline, Downloader, get_timestamp
+from conv import Converter
+import json
 import string
+from api import TradeRepublicApi
+import time
+import logging
+import coloredlogs
 
-def get_main_parser():
-    def formatter(prog):
-        return argparse.HelpFormatter(prog, max_help_position=25)
+get_logger = logging.getLogger
 
-    parser = argparse.ArgumentParser(
-        formatter_class=formatter,
-        description='Use "%(prog)s command_name --help" to get detailed help to a specific command',
-    )
-    for grp in parser._action_groups:
-        if grp.title == 'options':
-            grp.title = 'Options'
-        elif grp.title == 'positional arguments':
-            grp.title = 'Commands'
 
-    parser.add_argument(
-        '-v',
-        '--verbosity',
-        help='Set verbosity level (default: info)',
-        choices=['warning', 'info', 'debug'],
-        default='info',
-    )
-    parser.add_argument('-V', '--version', help='Print version information and quit', action='store_true')
-    parser.add_argument('--applogin', help='Use app login instead of  web login', action='store_true')
-    parser.add_argument('-n', '--phone_no', help='TradeRepublic phone number (international format)')
-    parser.add_argument('-p', '--pin', help='TradeRepublic pin')
+class PyTrPP:
+    Downloader = Downloader
+    Converter = Converter
 
-    # login
-    info = (
-        'Check if credentials file exists. If not create it and ask for input. Try to login.'
-        + ' Ask for device reset if needed'
-    )
+    def __init__(self, phone_no, pin, credentials_file=None, cookies_file=None,
+                 download_dir=None, events_file=None, payments_file=None, orders_file=None,
+                 locale='de', since=None, workers=8, logger=None):
+        if credentials_file is None and (phone_no is None or pin is None):
+            raise ValueError("Either phone_no and pin or crendentials_file required!")
+        self.phone_no = phone_no
+        self.pin = pin
+        self.credentials_file = credentials_file
+        self.cookies_file = cookies_file
+        self.save_cookies = bool(cookies_file)
+        self.download_dir = download_dir
+        self.events_file = events_file
+        self.payments_file = payments_file
+        self.orders_file = orders_file
+        self.locale = locale
+        self.since = since
+        self.workers = workers
+        self.tr: TradeRepublicApi|None = None
+        self.events: list[dict] = []
+        self.logger = logger if logger is not None else self.get_logger()
 
-    parser.add_argument('output', help='Output directory', metavar='PATH', type=Path)
-    parser.add_argument(
-        '--last-days', help='Number of last days to include (use 0 get all days)', metavar='DAYS', default=None, type=int
-    )
-    parser.add_argument(
-        '--workers', help='Number of workers for parallel downloading', metavar='WORKERS', default=8, type=int
-    )
+    def process(self):
+        self.login()
 
-    parser.add_argument('--cookies-file', help='Cookies file')
-    parser.add_argument('--credentials-file', help='Credential file')
-    parser.add_argument('--locale', help='Locale setting (e.g. "en" for English, "de" for German)', default='de', type=str)
-    parser.add_argument('-E', '--events-file', help='Events file to store')
-    parser.add_argument('-P', '--payments-file', help='Payments file to store')
-    parser.add_argument('-O', '--orders-file', help='Orders file to store')
-    parser.add_argument('-D', '--download-dir', help='Directory to download files to')
+        tl = Timeline(
+            tr=self.tr,
+            since_timestamp=self.since,
+            max_workers=self.workers,
+            logger=self.logger,
+        )
+        self.events = tl.get_events()
 
-    return parser
+        if self.download_dir:
+            dl = self.Downloader(
+                headers=self.tr.get_default_headers(),
+                max_workers=self.workers,
+            )
+            self.process_dl(self.events, self.download_dir, dl.dl)
+            dl.wait()
+
+        if self.payments_file or self.orders_file:
+            self.Converter().convert(self.events, self.payments_file, self.orders_file)
+
+        if self.events_file:
+            with open(self.events_file, 'w') as fh:
+                json.dump(self.events, fh, indent=2)
+
+    def input(self, request_time, countdown):
+        print('Enter the code you received to your mobile app as a notification.')
+        print(f'Enter nothing if you want to receive the (same) code as SMS. (Countdown: {countdown})')
+        code = input('Code: ')
+        if code == '':
+            countdown = countdown - (time.time() - request_time)
+            for remaining in range(int(countdown)):
+                print(f'Need to wait {int(countdown - remaining)} seconds before requesting SMS...', end='\r')
+                time.sleep(1)
+            print()
+            self.tr.resend_weblogin()
+            code = input('SMS requested. Enter the confirmation code:')
+        return code
+
+    def login(self):
+        '''
+        If web is true, use web login method as else simulate app login.
+        Check if credentials file exists else create it.
+        If no parameters are set but are needed then ask for input
+        '''
+        log = self.logger
+        tr = TradeRepublicApi(phone_no=self.phone_no, pin=self.pin, locale=self.locale, save_cookies=self.save_cookies,
+                              cookies_file=self.cookies_file, credentials_file=self.credentials_file)
+
+        # Use same login as app.traderepublic.com
+        if tr.resume_websession():
+            log.info('Web session resumed')
+        else:
+            try:
+                countdown = tr.inititate_weblogin()
+            except ValueError as e:
+                log.error(str(e))
+                raise ConnectionError
+            request_time = time.time()
+            code = self.input(request_time, countdown)
+            tr.complete_weblogin(code)
+
+
+        log.info('Logged in')
+        self.tr = tr
+
+    @staticmethod
+    def filepath(event: dict, doc: dict, dt: datetime, extension: str) -> Path:
+        """Return target filepath for given document"""
+        return Path(string.capwords(event['eventType'], '_')) / f"{dt:%Y-%m-%d} - {doc['title']} - {doc['id']}.{extension}"
+
+    def process_dl(self, events: dict, base_dir: Path, dl: callable):
+        base_dir = Path(base_dir)
+        base_dir.mkdir(parents=True, exist_ok=True)
+        self.logger.info(f"Downloading file into directory '{base_dir}'")
+        files = []
+        for event in events:
+            if 'details' in event:
+                for section in event['details']['sections']:
+                    if section['type'] == 'documents':
+                        for doc in section['data']:
+                            try:
+                                dt = datetime.strptime(doc['detail'], '%d.%m.%Y')
+                            except (ValueError, KeyError):
+                                dt = get_timestamp(event['timestamp'])
+                            doc_url = doc['action']['payload']
+                            try:
+                                extension = doc_url[:doc_url.index('?')]
+                                extension = extension[extension.rindex('.') + 1:]
+                            except ValueError:
+                                extension = 'pdf'
+                            filepath = self.filepath(event, doc, dt, extension)
+                            files.append((doc_url, filepath))
+        num = len(files)
+        for n,(doc_url, filepath) in enumerate(files, start=1):
+            fullpath = base_dir / filepath
+            if fullpath.exists():
+                self.logger.info(f"Skipping file {n}/{num}: '{filepath}'")
+            else:
+                self.logger.info(f"Downloading file {n}/{num}: '{filepath}'")
+                dl(doc_url, fullpath)
+
+    @classmethod
+    def main(cls, argv=None):
+        parser = cls.get_parser()
+        args = parser.parse_args(argv)
+        try:
+            cls(
+                phone_no=args.phone_no,
+                pin=args.pin,
+                credentials_file=args.credentials_file,
+                cookies_file=args.cookies_file,
+                download_dir=args.download_dir,
+                events_file=args.events_file,
+                payments_file=args.payments_file,
+                orders_file=args.orders_file,
+                locale=args.locale,
+                since=args.since,
+                workers=args.workers
+            ).process()
+        except ValueError as e:
+            parser.print_help()
+            parser.exit(1, str(e))
+
+
+    @staticmethod
+    def get_parser():
+        def formatter(prog):
+            return argparse.HelpFormatter(prog, max_help_position=25)
+
+        parser = argparse.ArgumentParser(
+            formatter_class=formatter,
+            description='Use "%(prog)s command_name --help" to get detailed help to a specific command',
+        )
+
+        parser.add_argument(
+            '-v',
+            '--verbosity',
+            help='Set verbosity level (default: info)',
+            choices=['warning', 'info', 'debug'],
+            default='info',
+        )
+        parser.add_argument('-V', '--version', help='Print version information and quit', action='store_true')
+        parser.add_argument('-n', '--phone_no', help='TradeRepublic phone number (international format)')
+        parser.add_argument('-p', '--pin', help='TradeRepublic pin')
+
+        parser.add_argument('-l', '--locale', help='Locale setting (e.g. "en" for English, "de" for German)',
+                            default='de', type=str)
+
+        parser.add_argument('-K', '--cookies-file', help='Cookies file')
+        parser.add_argument('-C', '--credentials-file', help='Credential file')
+        parser.add_argument('-E', '--events-file', help='Events file to store')
+        parser.add_argument('-P', '--payments-file', help='Payments file to store')
+        parser.add_argument('-O', '--orders-file', help='Orders file to store')
+        parser.add_argument('-D', '--download-dir', help='Directory to download files to')
+
+        since_group = parser \
+            .add_argument_group('Date Range', 'Control date range to include (mutually exclusive):') \
+            .add_mutually_exclusive_group()
+        since_group.add_argument(
+            '-d', '--last-days', help='Number of last days to include', metavar='DAYS', dest='since',
+            type=lambda s: datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+                           - timedelta(days=int(s) - 1)
+        )
+
+        since_group.add_argument('-s', '--since', help='Include only entry since this date', metavar='DATE',
+                                 dest='since',
+                                 type=lambda s: datetime.fromisoformat(s).astimezone(timezone.utc),
+                                 )
+        since_group.add_argument('-r', '--since-ref',
+                                 help='Include only entry newer than the modified date of this file',
+                                 metavar='FILE', dest='since',
+                                 type=lambda s: datetime.fromtimestamp(Path(s).stat().st_mtime, timezone.utc))
+
+        parser.add_argument(
+            '--workers', help='Number of workers for parallel downloading', metavar='WORKERS', default=8, type=int
+        )
+
+        return parser
+
+    @staticmethod
+    def get_logger(name=__name__, log_level=None):
+        '''
+        Colored logging
+
+        :param name: logger name (use __name__ variable)
+        :param verbosity:
+        :return: Logger
+        '''
+        shortname = name.replace('pytr.', '')
+        logger = logging.getLogger(shortname)
+
+        # no logging of libs
+        logger.propagate = False
+
+        if log_level == 'debug':
+            fmt = '%(asctime)s %(name)-9s %(levelname)-8s %(message)s'
+            datefmt = '%Y-%m-%d %H:%M:%S%z'
+        else:
+            fmt = '%(asctime)s %(message)s'
+            datefmt = '%H:%M:%S'
+
+        fs = {
+            'asctime': {'color': 'green'},
+            'hostname': {'color': 'magenta'},
+            'levelname': {'color': 'red', 'bold': True},
+            'name': {'color': 'magenta'},
+            'programname': {'color': 'cyan'},
+            'username': {'color': 'yellow'},
+        }
+
+        ls = {
+            'critical': {'color': 'red', 'bold': True},
+            'debug': {'color': 'green'},
+            'error': {'color': 'red'},
+            'info': {},
+            'notice': {'color': 'magenta'},
+            'spam': {'color': 'green', 'faint': True},
+            'success': {'color': 'green', 'bold': True},
+            'verbose': {'color': 'blue'},
+            'warning': {'color': 'yellow'},
+        }
+
+        coloredlogs.install(level=log_level, logger=logger, fmt=fmt, datefmt=datefmt, level_styles=ls, field_styles=fs)
+
+        return logger
 
 
 def main(argv=None):
-    parser = get_main_parser()
-    args = parser.parse_args(argv)
-
-    log = get_logger(__name__, args.verbosity)
-    log.setLevel(args.verbosity.upper())
-    log.debug('logging is set to debug')
-
-    if args.last_days is not None:
-        since_timestamp = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=args.last_days)
-    else:
-        since_timestamp = None
-
-    tr = login(phone_no=args.phone_no, pin=args.pin, web=not args.applogin, locale=args.locale,
-               credentials_file=args.credentials_file, cookies_file=args.cookies_file)
-
-    tl = Timeline(
-        tr=tr,
-        since_timestamp=since_timestamp,
-        max_workers=args.workers,
-    )
-    events = tl.get_events()
-
-    if args.download_dir:
-        dl = Downloader(
-            headers = tr._default_headers_web if tr._weblogin else tr._default_headers,
-            max_workers=args.workers,
-        )
-        process_dl(events, args.download_dir, dl.dl)
-        dl.wait()
-
-    if args.payments_file or args.orders_file:
-        conv(events, args.payments_file, args.orders_file)
-
-    if args.events_file:
-        log.info(f"Writing events to '{args.events_file}'.")
-        with open(args.events_file, 'w') as fh:
-            json.dump(events, fh, indent=2)
-
-
-
-def process_dl(events: dict, base_dir: Path, dl: callable):
-    base_dir = Path(base_dir)
-    base_dir.mkdir(parents=True, exist_ok=True)
-    for event in events:
-        if 'details' in event:
-            for section in event['details']['sections']:
-                if section['type'] == 'documents':
-                    for doc in section['data']:
-                        try:
-                            dt = datetime.strptime(doc['detail'], '%d.%m.%Y')
-                        except (ValueError, KeyError):
-                            dt = timestamp(event['timestamp'])
-                        doc_url = doc['action']['payload']
-                        try:
-                            extension = doc_url[:doc_url.index('?')]
-                            extension = extension[extension.rindex('.') + 1:]
-                        except ValueError:
-                            extension = 'pdf'
-                        filepath = base_dir / string.capwords(event['eventType'], '_') / f"{dt:%Y-%m-%d} - {doc['title']} - {doc['id']}.{extension}"
-                        dl(doc_url, filepath)
+    PyTrPP.main(argv)
 
 
 if __name__ == '__main__':

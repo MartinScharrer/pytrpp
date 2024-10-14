@@ -1,3 +1,4 @@
+import logging
 import re
 
 from pathlib import Path
@@ -7,11 +8,12 @@ from requests_futures.sessions import FuturesSession
 import json
 import asyncio
 from datetime import datetime, timezone
+import logging
 
 from pathvalidate import sanitize_filepath
 
-from utils import get_logger
 from api import TradeRepublicError
+
 
 def get_timestamp(ts: str) -> datetime:
     """Convert string timestamp to datetime object."""
@@ -25,9 +27,12 @@ def get_timestamp(ts: str) -> datetime:
 
 
 class Timeline:
-    def __init__(self, tr, since_timestamp=None, max_workers=8):
+    def __init__(self, tr, since_timestamp=None, max_workers=8, logger=None):
         self.tr = tr
-        self.log = get_logger(__name__)
+        if logger is None:
+            self.log = logging.getLogger(__name__)
+        else:
+            self.log = logger
         self.errors = 0
         self.received_detail = 0
         self.requested_detail = 0
@@ -205,6 +210,8 @@ class Timeline:
 
 
 class Downloader:
+    """Download multiple files asynchronously"""
+
     def __init__(self, headers: dict[str, str|bytes], max_workers=8):
         self.futures: list[Future] = []
         self.errors: int = 0

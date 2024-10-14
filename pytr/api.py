@@ -24,6 +24,7 @@ import asyncio
 import base64
 import hashlib
 import json
+import logging
 import pathlib
 import time
 import urllib.parse
@@ -35,9 +36,7 @@ import websockets
 from ecdsa import NIST256p, SigningKey
 from ecdsa.util import sigencode_der
 from http.cookiejar import MozillaCookieJar
-
-from utils import get_logger
-
+import logging
 
 home = pathlib.Path.home()
 BASE_DIR = home / '.pytr'
@@ -82,8 +81,8 @@ class TradeRepublicApi:
         self._session_token_expires_at = time.time() + 290
         self._session_token = val
 
-    def __init__(self, phone_no=None, pin=None, keyfile=None, locale='de', save_cookies=False, credentials_file = None, cookies_file = None):
-        self.log = get_logger(__name__)
+    def __init__(self, phone_no=None, pin=None, keyfile=None, locale='de', save_cookies=False, credentials_file = None, cookies_file = None, logger = None):
+        self.log = logger if logger is not None else logging.getLogger(__name__)
         self._locale = locale
         self._save_cookies = save_cookies
 
@@ -252,6 +251,10 @@ class TradeRepublicApi:
             r.raise_for_status()
             self._web_session_token_expires_at = time.time() + 290
         return self._websession.request(method=method, url=f'{self._host}{url_path}', data=payload)
+
+    def get_default_headers(self):
+        """Return default headers"""
+        return self._default_headers_web if self._weblogin else self._default_headers
 
     async def _get_ws(self):
         if self._ws and self._ws.open:

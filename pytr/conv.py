@@ -5,25 +5,9 @@ from datetime import datetime
 from decimal import Decimal, Context
 from typing import Callable, Any
 from pathlib import Path
+from trdl import get_timestamp
 
 RE_ISIN = re.compile(r"^[A-Z]{2}-?[\dA-Z]{9}-?\d$")
-
-
-def timestamp(ts: str) -> datetime:
-    """Convert string timestamp to datetime object."""
-    try:
-        return datetime.fromisoformat(ts)
-    except ValueError:
-        try:
-            return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%f%z")
-        except ValueError:
-            return datetime.fromisoformat(ts[:19])
-
-
-def load(filename: str) -> dict:
-    """Load JSON data from file."""
-    with open(filename, 'rt', encoding='utf-8') as fh:
-        return json.load(fh)
 
 
 class Amount:
@@ -196,7 +180,7 @@ class Investment(TransactionEvent):
     }
 
     def __init__(self, event: dict):
-        self.dt: datetime = timestamp(event['timestamp'])
+        self.dt: datetime = get_timestamp(event['timestamp'])
         self.value: Amount = amount(event)
         if event.get('title', '').startswith('Anleihe'):
             self.note = 'Anleihe'
@@ -243,7 +227,7 @@ class Payment(Event):
     type: str
 
     def __init__(self, event: dict):
-        self.dt: datetime = timestamp(event['timestamp'])
+        self.dt: datetime = get_timestamp(event['timestamp'])
         self.value: Amount = amount(event)
 
     def csv(self, sep=';', decimal=','):
@@ -282,7 +266,7 @@ class SecuritiesTransferOutgoing(Investment):
     type = 'Auslieferung'
 
     def __init__(self, event: dict):
-        self.dt: datetime = timestamp(event['timestamp'])
+        self.dt: datetime = get_timestamp(event['timestamp'])
         self.isin: str = self.get_isin(event)
         overview = self.get_section(event, 'Übersicht')
         for t in ('Asset', 'Anteil'):
@@ -439,103 +423,102 @@ class BondRepayment(Investment):
         self.type = 'Verkauf'
 
 
-event_types: dict[str, Callable[[dict], Any]] = {
-    # Orders
-    'ORDER_EXECUTED': Order,
-    'TRADE_INVOICE': Order,
-    'SAVINGS_PLAN_EXECUTED': SavingsPlanExec,
-    'SAVINGS_PLAN_INVOICE_CREATED': SavingsPlanExec,
-    'ACCOUNT_TRANSFER_INCOMING': AccountTransferIncoming,
-    'SECURITIES_TRANSFER_OUTGOING': SecuritiesTransferOutgoing,
-    'ORDER_EXPIRED': Ignore,
-    'ORDER_CANCELED': Ignore,
-    'YEAR_END_TAX_REPORT': Ignore,
-    'PRE_DETERMINED_TAX_BASE_EARNING': Ignore,
-    'REFERENCE_ACCOUNT_CHANGED': Ignore,
-    'EX_POST_COST_REPORT': Ignore,
-    'card_successful_verification': Ignore,
-    # Payments
-    'PAYMENT_INBOUND': PaymentInbound,
-    'INCOMING_TRANSFER': PaymentInbound,
-    'PAYMENT_INBOUND_SEPA_DIRECT_DEBIT': PaymentInboundSepaDirectDebit,
-    'PAYMENT_OUTBOUND': PaymentOutbound,
-    'OUTGOING_TRANSFER': PaymentOutbound,
-    'INCOMING_TRANSFER_DELEGATION': PaymentInbound,
-    'OUTGOING_TRANSFER_DELEGATION': PaymentOutbound,
-    'CREDIT': Dividend,
-    'ssp_corporate_action_invoice_cash': Dividend,
-    'INTEREST_PAYOUT_CREATED': InterestPayout,
-    'INTEREST_PAYOUT': InterestPayout,
-    'card_successful_oct': CardOriginalCreditTransaction,
-    'card_order_billed': CardOrderBilled,
-    'card_refund': CardRefund,
-    'card_successful_atm_withdrawal': CardWithdrawal,
-    'STOCK_PERK_REFUNDED': StockPerkRefunded,
-    'REPAYMENT': BondRepayment,
-    # Card
-    'card_successful_transaction': CardTransaction,
-    'card_failed_transaction': Ignore,
-    'card_failed_atm_withdrawal': Ignore,
-    'card_failed_verification': Ignore,
-    # Card related orders
-    'benefits_spare_change_execution': RoundUp,
-    'benefits_saveback_execution': SaveBack,
-    # Bonds
-    'COUPON_PAYMENT': CouponPayment,
-    # Account
-    'PUK_CREATED': Ignore,
-    'CUSTOMER_CREATED': Ignore,
-    'SECURITIES_ACCOUNT_CREATED': Ignore,
-    'DOCUMENTS_CREATED': Ignore,
-    'DOCUMENTS_ACCEPTED': Ignore,
-    'DEVICE_RESET': Ignore,
-    'PIN_RESET': Ignore,
-    'EMAIL_VALIDATED': Ignore,
-    'INPAYMENTS_SEPA_MANDATE_CREATED': Ignore,
-    'QUARTERLY_REPORT': Ignore,
-    'GESH_CORPORATE_ACTION': Ignore,
-    'new_tr_iban': Ignore,
-    'ssp_corporate_action_informative_notification': Ignore,
-    'VERIFICATION_TRANSFER_ACCEPTED': Ignore,
-    'MOBILE_CHANGED': Ignore,
-    'STOCK_PERK_EXPIRED': Ignore,
-    'AML_SOURCE_OF_WEALTH_RESPONSE_EXECUTED': Ignore,
-    'MOBILE_RESET': Ignore,
-    # Taxes
-    'EXEMPTION_ORDER_CHANGED': Ignore,
-    'EXEMPTION_ORDER_CHANGE_REQUESTED': Ignore,
-    'TAX_REFUND': TaxRefund,
-}
+class Converter:
+    event_types: dict[str, Callable[[dict], Any]] = {
+        # Orders
+        'ORDER_EXECUTED': Order,
+        'TRADE_INVOICE': Order,
+        'SAVINGS_PLAN_EXECUTED': SavingsPlanExec,
+        'SAVINGS_PLAN_INVOICE_CREATED': SavingsPlanExec,
+        'ACCOUNT_TRANSFER_INCOMING': AccountTransferIncoming,
+        'SECURITIES_TRANSFER_OUTGOING': SecuritiesTransferOutgoing,
+        'ORDER_EXPIRED': Ignore,
+        'ORDER_CANCELED': Ignore,
+        'YEAR_END_TAX_REPORT': Ignore,
+        'PRE_DETERMINED_TAX_BASE_EARNING': Ignore,
+        'REFERENCE_ACCOUNT_CHANGED': Ignore,
+        'EX_POST_COST_REPORT': Ignore,
+        'card_successful_verification': Ignore,
+        # Payments
+        'PAYMENT_INBOUND': PaymentInbound,
+        'INCOMING_TRANSFER': PaymentInbound,
+        'PAYMENT_INBOUND_SEPA_DIRECT_DEBIT': PaymentInboundSepaDirectDebit,
+        'PAYMENT_OUTBOUND': PaymentOutbound,
+        'OUTGOING_TRANSFER': PaymentOutbound,
+        'INCOMING_TRANSFER_DELEGATION': PaymentInbound,
+        'OUTGOING_TRANSFER_DELEGATION': PaymentOutbound,
+        'CREDIT': Dividend,
+        'ssp_corporate_action_invoice_cash': Dividend,
+        'INTEREST_PAYOUT_CREATED': InterestPayout,
+        'INTEREST_PAYOUT': InterestPayout,
+        'card_successful_oct': CardOriginalCreditTransaction,
+        'card_order_billed': CardOrderBilled,
+        'card_refund': CardRefund,
+        'card_successful_atm_withdrawal': CardWithdrawal,
+        'STOCK_PERK_REFUNDED': StockPerkRefunded,
+        'REPAYMENT': BondRepayment,
+        # Card
+        'card_successful_transaction': CardTransaction,
+        'card_failed_transaction': Ignore,
+        'card_failed_atm_withdrawal': Ignore,
+        'card_failed_verification': Ignore,
+        # Card related orders
+        'benefits_spare_change_execution': RoundUp,
+        'benefits_saveback_execution': SaveBack,
+        # Bonds
+        'COUPON_PAYMENT': CouponPayment,
+        # Account
+        'PUK_CREATED': Ignore,
+        'CUSTOMER_CREATED': Ignore,
+        'SECURITIES_ACCOUNT_CREATED': Ignore,
+        'DOCUMENTS_CREATED': Ignore,
+        'DOCUMENTS_ACCEPTED': Ignore,
+        'DEVICE_RESET': Ignore,
+        'PIN_RESET': Ignore,
+        'EMAIL_VALIDATED': Ignore,
+        'INPAYMENTS_SEPA_MANDATE_CREATED': Ignore,
+        'QUARTERLY_REPORT': Ignore,
+        'GESH_CORPORATE_ACTION': Ignore,
+        'new_tr_iban': Ignore,
+        'ssp_corporate_action_informative_notification': Ignore,
+        'VERIFICATION_TRANSFER_ACCEPTED': Ignore,
+        'MOBILE_CHANGED': Ignore,
+        'STOCK_PERK_EXPIRED': Ignore,
+        'AML_SOURCE_OF_WEALTH_RESPONSE_EXECUTED': Ignore,
+        'MOBILE_RESET': Ignore,
+        # Taxes
+        'EXEMPTION_ORDER_CHANGED': Ignore,
+        'EXEMPTION_ORDER_CHANGE_REQUESTED': Ignore,
+        'TAX_REFUND': TaxRefund,
+    }
 
+    def convert(self, events: dict, payments_file: None|str|Path, orders_file: None|str|Path):
+        processed = self.process(events)
 
-def process(events: dict):
-    data = []
-    for event in events:
-        func = event_types.get(event['eventType'], Unknown)
-        ev = func(event)
-        if isinstance(ev, Unknown):
-            print(f"Unknown event type {event['eventType']}")
-        if not isinstance(ev, Ignore):
-            data.append(func(event))
-    return data
+        if payments_file:
+            with open(payments_file, 'w', encoding='utf-8') as fh:
+                fh.write(Payment.csv_header())
+                for p in processed:
+                    if isinstance(p, Payment):
+                        fh.write(p.csv())
 
+        if orders_file:
+            with open(orders_file, 'w', encoding='utf-8') as fh:
+                fh.write(Investment.csv_header())
+                for p in processed:
+                    if isinstance(p, Investment):
+                        fh.write(p.csv())
 
-def conv(events: dict, payments_file: None|str|Path, orders_file: None|str|Path):
-    processed = process(events)
-
-    if payments_file:
-        with open(payments_file, 'w', encoding='utf-8') as fh:
-            fh.write(Payment.csv_header())
-            for p in processed:
-                if isinstance(p, Payment):
-                    fh.write(p.csv())
-
-    if orders_file:
-        with open(orders_file, 'w', encoding='utf-8') as fh:
-            fh.write(Investment.csv_header())
-            for p in processed:
-                if isinstance(p, Investment):
-                    fh.write(p.csv())
+    def process(self, events: dict):
+        data = []
+        for event in events:
+            func = self.event_types.get(event['eventType'], Unknown)
+            ev = func(event)
+            if isinstance(ev, Unknown):
+                print(f"Unknown event type {event['eventType']}")
+            if not isinstance(ev, Ignore):
+                data.append(func(event))
+        return data
 
 
 def main():
@@ -545,8 +528,7 @@ def main():
     with open(filename, 'rt', encoding='utf-8') as fh:
         events = json.load(fh)
     basedir = Path(filename).parent
-    conv(events, basedir / 'payments.csv', basedir / 'orders.csv')
-
+    Converter.convert(events, basedir / 'payments.csv', basedir / 'orders.csv')
 
 
 if __name__ == '__main__':
