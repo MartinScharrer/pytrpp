@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name='pytrpp',
-    version='0.1.0',
+    version='0.1.2',
     description='Download TradeRepublic files and convert data for import in Portfolio Performance.',
     long_description=(Path(__file__).parent.resolve() / 'README.md').read_text('utf-8'),
     long_description_content_type='text/markdown',
