@@ -1,17 +1,24 @@
 #!/usr/bin/env python
+__VERSION__ = '0.1.0'
 
 import argparse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from trdl import Timeline, Downloader, get_timestamp
-from conv import Converter
 import json
 import string
-from api import TradeRepublicApi
 import time
 import logging
 import coloredlogs
+
+try:
+    from trdl import Timeline, Downloader, get_timestamp
+    from api import TradeRepublicApi
+    from conv import Converter
+except ImportError:
+    from .trdl import Timeline, Downloader, get_timestamp
+    from .api import TradeRepublicApi
+    from .conv import Converter
 
 get_logger = logging.getLogger
 
@@ -19,6 +26,12 @@ get_logger = logging.getLogger
 class PyTrPP:
     Downloader = Downloader
     Converter = Converter
+
+    COOKIE_FILE = '.pytrpp/cookies.txt'
+    CREDENTIALS_FILE = '.pytrpp/cookies.txt'
+    EVENTS_FILE = 'events.json'
+    PAYMENTS_FILE = 'payments.csv'
+    ORDERS_FILE = 'orders.csv'
 
     def __init__(self, phone_no, pin, credentials_file=None, cookies_file=None,
                  download_dir=None, events_file=None, payments_file=None, orders_file=None,
@@ -147,14 +160,16 @@ class PyTrPP:
     @classmethod
     def main(cls, argv=None):
         parser = cls.get_parser()
-        args = parser.parse_args(argv)
+        args = cls.parse(parser, argv)
+        if args.version:
+            parser.exit(0, f'pytrpp v{__VERSION__} -- Download TradeRepublic files and export data to Portfolio Performance')
         try:
             cls(
                 phone_no=args.phone_no,
                 pin=args.pin,
                 credentials_file=args.credentials_file,
                 cookies_file=args.cookies_file,
-                download_dir=args.download_dir,
+                download_dir=args.docs_dir,
                 events_file=args.events_file,
                 payments_file=args.payments_file,
                 orders_file=args.orders_file,
@@ -166,6 +181,28 @@ class PyTrPP:
             parser.print_help()
             parser.exit(1, str(e))
 
+    @classmethod
+    def parse(cls, parser=None, argv=None):
+        if parser is None:
+            parser = cls.get_parser()
+        args = parser.parse_args(argv)
+
+        if args.dir:
+            args.dir = Path(args.dir)
+            if not args.docs_dir:
+                args.docs_dir = args.dir
+            if args.cookies_file is None:
+                args.cookies_file = args.dir / cls.COOKIE_FILE
+            if args.credentials_file is None:
+                args.credentials_file = args.dir / cls.CREDENTIALS_FILE
+            if args.events_file is None:
+                args.events_file = args.dir / cls.EVENTS_FILE
+            if args.payments_file is None:
+                args.payments_file = args.dir / cls.PAYMENTS_FILE
+            if args.orders_file is None:
+                args.orders_file = args.dir / cls.ORDERS_FILE
+
+        return args
 
     @staticmethod
     def get_parser():
@@ -191,12 +228,14 @@ class PyTrPP:
         parser.add_argument('-l', '--locale', help='Locale setting (e.g. "en" for English, "de" for German)',
                             default='de', type=str)
 
+        parser.add_argument('-D', '--dir', type=Path, default=None,
+                            help='Main directory to use. Special path can be set using the following options.')
         parser.add_argument('-K', '--cookies-file', help='Cookies file')
         parser.add_argument('-C', '--credentials-file', help='Credential file')
         parser.add_argument('-E', '--events-file', help='Events file to store')
         parser.add_argument('-P', '--payments-file', help='Payments file to store')
         parser.add_argument('-O', '--orders-file', help='Orders file to store')
-        parser.add_argument('-D', '--download-dir', help='Directory to download files to')
+        parser.add_argument('-F', '--docs-dir', help='Directory to download files to')
 
         since_group = parser \
             .add_argument_group('Date Range', 'Control date range to include (mutually exclusive):') \

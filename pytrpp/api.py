@@ -89,7 +89,7 @@ class TradeRepublicApi:
         self._credentials_file = pathlib.Path(credentials_file) if credentials_file else CREDENTIALS_FILE
         self._cookies_file = pathlib.Path(cookies_file) if cookies_file else COOKIES_FILE
 
-        self._cookies_file.parent.mkdir(exist_ok=True)
+        self._cookies_file.parent.mkdir(parents=True, exist_ok=True)
 
         if not (phone_no and pin):
             try:

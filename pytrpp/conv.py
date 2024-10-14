@@ -5,7 +5,11 @@ from datetime import datetime
 from decimal import Decimal, Context
 from typing import Callable, Any
 from pathlib import Path
-from trdl import get_timestamp
+
+try:
+    from trdl import get_timestamp
+except ImportError:
+    from .trdl import get_timestamp
 
 RE_ISIN = re.compile(r"^[A-Z]{2}-?[\dA-Z]{9}-?\d$")
 

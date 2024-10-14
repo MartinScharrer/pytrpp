@@ -1,86 +1,84 @@
-[![GitHub tag (with filter)](https://img.shields.io/github/v/tag/marzzzello/pytr?style=for-the-badge&link=https%3A%2F%2Fgithub.com%2Fmarzzzello%2Fpytr%2Ftags)](https://github.com/marzzzello/pytr/tags)
-[![PyPI build and publish](https://img.shields.io/github/actions/workflow/status/marzzzello/pytr/publish-pypi.yml?link=https%3A%2F%2Fgithub.com%2Fmarzzzello%2Fpytr%2Factions%2Fworkflows%2Fpublish-pypi.yml&style=for-the-badge)](https://github.com/marzzzello/pytr/actions/workflows/publish-pypi.yml)
-[![PyPI - Version](https://img.shields.io/pypi/v/pytr?link=https%3A%2F%2Fpypi.org%2Fproject%2Fpytr%2F&style=for-the-badge)](https://pypi.org/project/pytr/)
+[![GitHub tag (with filter)](https://img.shields.io/github/v/tag/martin_scharrer/pytrpp?style=for-the-badge&link=https%3A%2F%2Fgithub.com%2Fmartin_scharrer%2Fpytrpp%2Ftags)](https://github.com/martin_scharrer/pytrpp/tags)
+[![PyPI build and publish](https://img.shields.io/github/actions/workflow/status/martin_scharrer/pytrpp/publish-pypi.yml?link=https%3A%2F%2Fgithub.com%2Fmartin_scharrer%2Fpytrpp%2Factions%2Fworkflows%2Fpublish-pypi.yml&style=for-the-badge)](https://github.com/martin_scharrer/pytrpp/actions/workflows/publish-pypi.yml)
+[![PyPI - Version](https://img.shields.io/pypi/v/pytrpp?link=https%3A%2F%2Fpypi.org%2Fproject%2Fpytrpp%2F&style=for-the-badge)](https://pypi.org/project/pytrpp/)
 
-# pytr: Use TradeRepublic in terminal
+# pytrpp: Download TradeRepublic files and export data to Portfolio Performance
 
-This is a library for the private API of the Trade Republic online brokerage. I am not affiliated with Trade Republic Bank GmbH.
+This is a library for the private API of the Trade Republic online brokerage.
+This package and its authors are not affiliated with Trade Republic Bank GmbH.
+
+Files can be produced to import orders and other transactions into Portfolio Performance: 
+*An open source tool to calculate the overall performance of an investment portfolio - across all accounts - using True-Time Weighted Return or Internal Rate of Return.*
+https://www.portfolio-performance.info/.
+The package authors are not affiliated with Portfolio Performance.
+
 
 ## Installation
 
-Make sure Python and a Python package manager like pip or [pipx](https://pipx.pypa.io/) (recommended) is installed.
+Install release from PyPI with `pip install pytrpp`
 
-Install release from PyPI with `pipx install pytr`
-
-Or install from git repo like so:
-
-```sh
-pipx install git+https://github.com/marzzzello/pytr
-```
-
-### Update
-
-```sh
-pipx upgrade pytr
-# or
-pipx upgrade-all
-```
+Or install from git repo like so: `pip install git+https://github.com/martin_scharrer/pytrpp`
 
 
 ## Usage
+Recommended usages:
+ * ``pytrpp -n PHONE_NO -p PIN -D TARGET_DIR``
+ * ``pytrpp -C CREDENTIALS_FILE -D TARGET_DIR`` \
+   The credential file consists of two lines with the phone number followed by the PIN.
 
-```
-$ pytr help
-usage: pytr [-h] [-v {warning,info,debug}] [-V]
-            {help,login,dl_docs,portfolio,details,get_price_alarms,set_price_alarms,export_transactions,completion}
-            ...
 
-Use "pytr command_name --help" to get detailed help to a specific command
+Full usage information:
+````
+usage: pytrpp [-h] [-v {warning,info,debug}] [-V] [-n PHONE_NO] [-p PIN]
+              [-l LOCALE] [-D DIR] [-K COOKIES_FILE] [-C CREDENTIALS_FILE]
+              [-E EVENTS_FILE] [-P PAYMENTS_FILE] [-O ORDERS_FILE]
+              [-F DOCS_DIR] [-d DAYS | -s DATE | -r FILE] [--workers WORKERS]
 
-Commands:
-  {help,login,dl_docs,portfolio,details,get_price_alarms,set_price_alarms,export_transactions,completion}
-                         Desired action to perform
-    help                 Print this help message
-    login                Check if credentials file exists. If not create it
-                         and ask for input. Try to login. Ask for device reset
-                         if needed
-    dl_docs              Download all pdf documents from the timeline and sort
-                         them into folders. Also export account transactions
-                         (account_transactions.csv) and JSON files with all
-                         events (events_with_documents.json and
-                         other_events.json
-    portfolio            Show current portfolio
-    details              Get details for an ISIN
-    get_price_alarms     Get overview of current price alarms
-    set_price_alarms     Set price alarms based on diff from current price
-    export_transactions  Create a CSV with the deposits and removals ready for
-                         importing into Portfolio Performance
-    completion           Print shell tab completion
+Use "pytrpp command_name --help" to get detailed help to a specific command
 
-Options:
+options:
   -h, --help             show this help message and exit
   -v {warning,info,debug}, --verbosity {warning,info,debug}
                          Set verbosity level (default: info)
   -V, --version          Print version information and quit
+  -n PHONE_NO, --phone_no PHONE_NO
+                         TradeRepublic phone number (international format)
+  -p PIN, --pin PIN      TradeRepublic pin
+  -l LOCALE, --locale LOCALE
+                         Locale setting (e.g. "en" for English, "de" for
+                         German)
+  -D DIR, --dir DIR      Main directory to use. Special path can be set using
+                         the following options.
+  -K COOKIES_FILE, --cookies-file COOKIES_FILE
+                         Cookies file
+  -C CREDENTIALS_FILE, --credentials-file CREDENTIALS_FILE
+                         Credential file
+  -E EVENTS_FILE, --events-file EVENTS_FILE
+                         Events file to store
+  -P PAYMENTS_FILE, --payments-file PAYMENTS_FILE
+                         Payments file to store
+  -O ORDERS_FILE, --orders-file ORDERS_FILE
+                         Orders file to store
+  -F DOCS_DIR, --docs-dir DOCS_DIR
+                         Directory to download files to
+  --workers WORKERS      Number of workers for parallel downloading
 
-```
+Date Range:
+  Control date range to include (mutually exclusive):
+
+  -d DAYS, --last-days DAYS
+                         Number of last days to include
+  -s DATE, --since DATE  Include only entry since this date
+  -r FILE, --since-ref FILE
+                         Include only entry newer than the modified date of
+                         this file
+````
 
 ## Authentication
 
-There are two authentication methods:
+Currently only web login (simulating a browser) is supported.
 
-- Web login (default)
-- App login
+The phone number and the PIN must be provided. A login code is then generated as second factor on the connected
+smartphone which also needs to be entered. The login can be buffered using a cookie file, so multiple runs will
+only require the login code once until the cookie expires.
 
-Web login is the newer method that uses the same login method as [app.traderepublic.com](https://app.traderepublic.com/), meaning you receive a token in the TradeRepublic app or via SMS.
-
-App login is the older method that uses the same login method as the TradeRepublic app.
-First you need to perform a device reset - a private key will be generated that pins your "device". The private key is saved to your keyfile. This procedure will log you out from your mobile device.
-
-```sh
-$ pytr login
-$ # or
-$ pytr login --phone_no +49123456789 --pin 1234
-```
-
-If no arguments are supplied pytr will look for them in the file `~/.pytr/credentials` (the first line must contain the phone number, the second line the pin). If the file doesn't exist pytr will ask for for the phone number and pin.

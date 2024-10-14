@@ -10,9 +10,10 @@ import asyncio
 from datetime import datetime, timezone
 import logging
 
-from pathvalidate import sanitize_filepath
-
-from api import TradeRepublicError
+try:
+    from api import TradeRepublicError
+except ImportError:
+    from .api import TradeRepublicError
 
 
 def get_timestamp(ts: str) -> datetime:
@@ -131,6 +132,8 @@ class Timeline:
                 event = next(self.timeline_events_iter)
             except StopIteration:
                 self.log.info('All timeline details requested')
+                if self.requested_detail == 0:
+                    self.done = True
                 return False
 
             action = event.get('action')
@@ -167,7 +170,9 @@ class Timeline:
         # when all requested timeline events are received request 5 new
         if self.received_detail == self.requested_detail:
             remaining = len(self.timeline_events)
-            if remaining < 5:
+            if remaining == 0:
+                self.done = True
+            elif remaining < 5:
                 await self._get_timeline_details(remaining)
             else:
                 await self._get_timeline_details(5)
