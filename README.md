@@ -1,5 +1,5 @@
-[![GitHub tag (with filter)](https://img.shields.io/github/v/tag/martin_scharrer/pytrpp?style=for-the-badge&link=https%3A%2F%2Fgithub.com%2Fmartin_scharrer%2Fpytrpp%2Ftags)](https://github.com/martin_scharrer/pytrpp/tags)
-[![PyPI build and publish](https://img.shields.io/github/actions/workflow/status/martin_scharrer/pytrpp/publish-pypi.yml?link=https%3A%2F%2Fgithub.com%2Fmartin_scharrer%2Fpytrpp%2Factions%2Fworkflows%2Fpublish-pypi.yml&style=for-the-badge)](https://github.com/martin_scharrer/pytrpp/actions/workflows/publish-pypi.yml)
+[![GitHub tag (with filter)](https://img.shields.io/github/v/tag/MartinScharrer/pytrpp?style=for-the-badge&link=https%3A%2F%2Fgithub.com%2FMartinScharrer%2Fpytrpp%2Ftags)](https://github.com/MartinScharrer/pytrpp/tags)
+[![PyPI build and publish](https://img.shields.io/github/actions/workflow/status/MartinScharrer/pytrpp/publish-pypi.yml?link=https%3A%2F%2Fgithub.com%2FMartinScharrer%2Fpytrpp%2Factions%2Fworkflows%2Fpublish-pypi.yml&style=for-the-badge)](https://github.com/MartinScharrer/pytrpp/actions/workflows/publish-pypi.yml)
 [![PyPI - Version](https://img.shields.io/pypi/v/pytrpp?link=https%3A%2F%2Fpypi.org%2Fproject%2Fpytrpp%2F&style=for-the-badge)](https://pypi.org/project/pytrpp/)
 
 # pytrpp: Download TradeRepublic files and export data to Portfolio Performance
@@ -17,7 +17,7 @@ The package authors are not affiliated with Portfolio Performance.
 
 Install release from PyPI with `pip install pytrpp`
 
-Or install from git repo like so: `pip install git+https://github.com/martin_scharrer/pytrpp`
+Or install from git repo like so: `pip install git+https://github.com/MartinScharrer/pytrpp`
 
 
 ## Usage
