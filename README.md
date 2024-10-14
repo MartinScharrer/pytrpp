@@ -12,6 +12,7 @@ Files can be produced to import orders and other transactions into Portfolio Per
 https://www.portfolio-performance.info/.
 The package authors are not affiliated with Portfolio Performance.
 
+This package is based on the source of ``pytr`` (https://github.com/pytr-org/pytr) originally by marzzzello.
 
 ## Installation
 
