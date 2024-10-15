@@ -101,25 +101,24 @@ class PyTrPP:
         If no parameters are set but are needed then ask for input
         '''
         log = self.logger
-        tr = TradeRepublicApi(phone_no=self.phone_no, pin=self.pin, locale=self.locale, save_cookies=self.save_cookies,
-                              cookies_file=self.cookies_file, credentials_file=self.credentials_file)
+        self.tr = TradeRepublicApi(phone_no=self.phone_no, pin=self.pin, locale=self.locale,
+                                   save_cookies=self.save_cookies, cookies_file=self.cookies_file,
+                                   credentials_file=self.credentials_file)
 
         # Use same login as app.traderepublic.com
-        if tr.resume_websession():
+        if self.tr.resume_websession():
             log.info('Web session resumed')
         else:
             try:
-                countdown = tr.inititate_weblogin()
+                countdown = self.tr.inititate_weblogin()
             except ValueError as e:
                 log.error(str(e))
                 raise ConnectionError
             request_time = time.time()
             code = self.input(request_time, countdown)
-            tr.complete_weblogin(code)
-
+            self.tr.complete_weblogin(code)
 
         log.info('Logged in')
-        self.tr = tr
 
     @staticmethod
     def filepath(event: dict, doc: dict, dt: datetime, extension: str) -> Path:
