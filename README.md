@@ -23,9 +23,12 @@ Or install from git repo like so: `pip install git+https://github.com/MartinScha
 
 ## Usage
 Recommended usages:
- * ``pytrpp -n PHONE_NO -p PIN -D TARGET_DIR``
+ * ``pytrpp [-n PHONE_NO] [-p PIN] -D TARGET_DIR`` \
+   If either phone number or PIN is left out a prompt is generated for it. 
  * ``pytrpp -C CREDENTIALS_FILE -D TARGET_DIR`` \
-   The credential file consists of two lines with the phone number followed by the PIN.
+   The credentials file consists of up to two lines with the phone number followed by the PIN.
+   For security reasons the PIN can be left out or be an empty line from the credentials file.
+   It must then be entered using the prompt.
 
 
 Full usage information:
