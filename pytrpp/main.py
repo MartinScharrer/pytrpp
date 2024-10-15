@@ -81,7 +81,7 @@ class PyTrPP:
     ORDERS_FILE = 'orders.csv'
 
     def __init__(self, phone_no, pin, credentials_file=None, cookies_file=None,
-                 download_dir=None, events_file=None, payments_file=None, orders_file=None,
+                 docs_dir=None, events_file=None, payments_file=None, orders_file=None,
                  locale='de', since=None, workers=8, logger=None, store_credentials_file=None):
         credentials = self.Credentials(phone_no, pin, credentials_file, store_credentials_file)
         self.phone_no = credentials.phone_no
@@ -89,7 +89,7 @@ class PyTrPP:
         self.credentials_file = credentials.credentials_file
         self.cookies_file = cookies_file
         self.save_cookies = bool(cookies_file)
-        self.download_dir = download_dir
+        self.docs_dir = docs_dir
         self.events_file = events_file
         self.payments_file = payments_file
         self.orders_file = orders_file
@@ -111,12 +111,12 @@ class PyTrPP:
         )
         self.events = tl.get_events()
 
-        if self.download_dir:
+        if self.docs_dir:
             dl = self.Downloader(
                 headers=self.tr.get_default_headers(),
                 max_workers=self.workers,
             )
-            self.process_dl(self.events, self.download_dir, dl.dl)
+            self.process_dl(self.events, self.docs_dir, dl.dl)
             dl.wait()
 
         if self.payments_file or self.orders_file:
@@ -214,7 +214,7 @@ class PyTrPP:
                 pin=args.pin,
                 credentials_file=args.credentials_file,
                 cookies_file=args.cookies_file,
-                download_dir=args.docs_dir,
+                docs_dir=args.docs_dir,
                 events_file=args.events_file,
                 payments_file=args.payments_file,
                 orders_file=args.orders_file,
@@ -224,8 +224,7 @@ class PyTrPP:
                 store_credentials_file=args.store_credentials_file,
             ).process()
         except ValueError as e:
-            parser.print_help()
-            parser.exit(1, str(e))
+            parser.error(str(e))
 
     @classmethod
     def parse(cls, parser=None, argv=None):
@@ -247,6 +246,8 @@ class PyTrPP:
                 args.payments_file = args.dir / cls.PAYMENTS_FILE
             if args.orders_file is None:
                 args.orders_file = args.dir / cls.ORDERS_FILE
+        elif not any((args.docs_dir, args.events_file, args.payments_file, args.orders_file)):
+            parser.error('No output target selected. Try adding "-D <OutputDirectory>".')
 
         return args
 
@@ -314,7 +315,7 @@ class PyTrPP:
         Colored logging
 
         :param name: logger name (use __name__ variable)
-        :param verbosity:
+        :param log_level:
         :return: Logger
         '''
         shortname = name.replace('pytr.', '')
