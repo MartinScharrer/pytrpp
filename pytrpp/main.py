@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-__VERSION__ = '0.1.2'
+__VERSION__ = '0.1.3'
 
 import argparse
 from datetime import datetime, timedelta, timezone
