@@ -23,9 +23,56 @@ except ImportError:
 get_logger = logging.getLogger
 
 
+class Credentials:
+    def __init__(self, phone_no=None, pin=None, credentials_file=None, store_credentials=False):
+        self.phone_no = phone_no
+        self.pin = pin
+        self.credentials_file = credentials_file
+        self.store_credentials = store_credentials
+
+        # Load from file if not given
+        if not self.phone_no or not self.pin:
+            file_content_used = False
+            phone_no_file, pin_file = self.load()
+            if not self.phone_no:
+                self.phone_no = phone_no_file
+            if not self.pin:
+                self.pin = pin_file
+
+        # If not in file as well
+        if not self.phone_no or not self.pin:
+            self.input()
+
+        if store_credentials:
+            self.store()
+
+    def input(self):
+        if not self.phone_no:
+            self.phone_no = input("Please enter phone number (international format): ")
+        if not self.pin:
+            self.pin = input("Please enter PIN: ")
+
+    def load(self) -> tuple[str|None, str|None]:
+        if not self.credentials_file:
+            return None, None
+        try:
+            lines: list[str|None] = Path(self.credentials_file).read_text(encoding='utf8').splitlines(keepends=False)
+            lines.extend((None, None))
+            return lines[0], lines[1]
+        except FileNotFoundError:
+            return None, None
+
+    def store(self):
+        if self.credentials_file:
+            phone_no = self.phone_no if self.phone_no else ''
+            pin = self.pin if self.pin else ''
+            Path(self.credentials_file).write_text(f'{phone_no}\n{pin}\n', encoding='utf8')
+
+
 class PyTrPP:
     Downloader = Downloader
     Converter = Converter
+    Credentials = Credentials
 
     COOKIE_FILE = '.pytrpp/cookies.txt'
     CREDENTIALS_FILE = '.pytrpp/cookies.txt'
@@ -35,12 +82,11 @@ class PyTrPP:
 
     def __init__(self, phone_no, pin, credentials_file=None, cookies_file=None,
                  download_dir=None, events_file=None, payments_file=None, orders_file=None,
-                 locale='de', since=None, workers=8, logger=None):
-        if credentials_file is None and (phone_no is None or pin is None):
-            raise ValueError("Either phone_no and pin or crendentials_file required!")
-        self.phone_no = phone_no
-        self.pin = pin
-        self.credentials_file = credentials_file
+                 locale='de', since=None, workers=8, logger=None, store_credentials_file=None):
+        credentials = self.Credentials(phone_no, pin, credentials_file, store_credentials_file)
+        self.phone_no = credentials.phone_no
+        self.pin = credentials.pin
+        self.credentials_file = credentials.credentials_file
         self.cookies_file = cookies_file
         self.save_cookies = bool(cookies_file)
         self.download_dir = download_dir
@@ -174,7 +220,8 @@ class PyTrPP:
                 orders_file=args.orders_file,
                 locale=args.locale,
                 since=args.since,
-                workers=args.workers
+                workers=args.workers,
+                store_credentials_file=args.store_credentials_file,
             ).process()
         except ValueError as e:
             parser.print_help()
@@ -230,7 +277,8 @@ class PyTrPP:
         parser.add_argument('-D', '--dir', type=Path, default=None,
                             help='Main directory to use. Special path can be set using the following options.')
         parser.add_argument('-K', '--cookies-file', help='Cookies file')
-        parser.add_argument('-C', '--credentials-file', help='Credential file')
+        parser.add_argument('-C', '--credentials-file', help='Credentials file')
+        parser.add_argument('-S', '--store-credentials-file', help='Store credentials in file', action='store_true')
         parser.add_argument('-E', '--events-file', help='Events file to store')
         parser.add_argument('-P', '--payments-file', help='Payments file to store')
         parser.add_argument('-O', '--orders-file', help='Orders file to store')
