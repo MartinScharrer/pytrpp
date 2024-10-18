@@ -210,13 +210,16 @@ class PyTrPP:
                             filepath = self.filepath(event, doc, dt, extension)
                             files.append((doc_url, filepath))
         num = len(files)
-        for n,(doc_url, filepath) in enumerate(files, start=1):
+        skipped = 0
+        for n,(doc_url, filepath) in enumerate(reversed(files), start=1):
             fullpath = base_dir / filepath
             if fullpath.exists():
-                self.logger.info(f"Skipping file {n}/{num}: '{filepath}'")
+                skipped += 1
+                self.logger.debug(f"Skipping file {n}/{num}: '{filepath}'")
             else:
                 self.logger.info(f"Downloading file {n}/{num}: '{filepath}'")
                 dl(doc_url, fullpath)
+        self.logger.info(f"Downloaded {num - skipped} files. Skipped {skipped} files as they were already present.")
 
     @classmethod
     def main(cls, argv=None):
