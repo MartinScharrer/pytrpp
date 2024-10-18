@@ -24,7 +24,7 @@ get_logger = logging.getLogger
 
 
 class Credentials:
-    def __init__(self, phone_no=None, pin=None, credentials_file=None, store_credentials=False):
+    def __init__(self, phone_no=None, pin=None, credentials_file=None, store_credentials=0):
         self.phone_no = phone_no
         self.pin = pin
         self.credentials_file = credentials_file
@@ -63,10 +63,12 @@ class Credentials:
             return None, None
 
     def store(self):
-        if self.credentials_file:
+        if self.credentials_file and self.store_credentials:
             phone_no = self.phone_no if self.phone_no else ''
-            pin = self.pin if self.pin else ''
-            Path(self.credentials_file).write_text(f'{phone_no}\n{pin}\n', encoding='utf8')
+            pin = self.pin if self.pin and self.store_credentials >= 2 else ''
+            p = Path(self.credentials_file)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(f'{phone_no}\n{pin}\n', encoding='utf8')
 
 
 class PyTrPP:
@@ -82,8 +84,8 @@ class PyTrPP:
 
     def __init__(self, phone_no, pin, credentials_file=None, cookies_file=None,
                  docs_dir=None, events_file=None, payments_file=None, orders_file=None,
-                 locale='de', since=None, workers=8, logger=None, store_credentials_file=None):
-        credentials = self.Credentials(phone_no, pin, credentials_file, store_credentials_file)
+                 locale='de', since=None, workers=8, logger=None, store_credentials=0):
+        credentials = self.Credentials(phone_no, pin, credentials_file, store_credentials)
         self.phone_no = credentials.phone_no
         self.pin = credentials.pin
         self.credentials_file = credentials.credentials_file
@@ -240,7 +242,7 @@ class PyTrPP:
                 locale=args.locale,
                 since=args.since,
                 workers=args.workers,
-                store_credentials_file=args.store_credentials_file,
+                store_credentials=args.store_credentials,
             ).process()
         except ValueError as e:
             parser.error(str(e))
@@ -300,7 +302,8 @@ class PyTrPP:
                             help='Main directory to use. Special path can be set using the following options.')
         parser.add_argument('-K', '--cookies-file', help='Cookies file')
         parser.add_argument('-C', '--credentials-file', help='Credentials file')
-        parser.add_argument('-S', '--store-credentials-file', help='Store credentials in file', action='store_true')
+        parser.add_argument('-S', '--store-credentials', action='count', default=0,
+                            help='Store credentials in file. If used once the phone number will be stored. Use twice to also store the PIN.', )
         parser.add_argument('-E', '--events-file', help='Events file to store')
         parser.add_argument('-P', '--payments-file', help='Payments file to store')
         parser.add_argument('-O', '--orders-file', help='Orders file to store')
