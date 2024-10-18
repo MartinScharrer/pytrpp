@@ -75,7 +75,7 @@ class PyTrPP:
     Credentials = Credentials
 
     COOKIE_FILE = '.pytrpp/cookies.txt'
-    CREDENTIALS_FILE = '.pytrpp/cookies.txt'
+    CREDENTIALS_FILE = '.pytrpp/credentials.txt'
     EVENTS_FILE = 'events.json'
     PAYMENTS_FILE = 'payments.csv'
     ORDERS_FILE = 'orders.csv'
