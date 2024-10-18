@@ -198,7 +198,7 @@ class TradeRepublicApi:
         except KeyError:
             err = j.get('errors')
             if err:
-                raise ValueError(str(err))
+                raise ValueError(json.dumps(err))
             else:
                 raise ValueError('processId not in reponse')
         return int(j['countdownInSeconds']) + 1
@@ -214,7 +214,12 @@ class TradeRepublicApi:
             raise ValueError('Initiate web login first.')
 
         r = self._websession.post(f'{self._host}/api/v1/auth/web/login/{self._process_id}/{verify_code}')
-        r.raise_for_status()
+        if 400 <= r.status_code <= 600:
+            err = r.json().get('errors')
+            if err:
+                raise ValueError(json.dumps(err))
+            else:
+                raise ValueError('Validation code invalid')
         self.save_websession()
         self._weblogin = True
 

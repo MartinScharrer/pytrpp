@@ -157,12 +157,28 @@ class PyTrPP:
         else:
             try:
                 countdown = self.tr.inititate_weblogin()
+                request_time = time.time()
+                code = self.input(request_time, countdown)
+                self.tr.complete_weblogin(code)
             except ValueError as e:
-                log.error(str(e))
-                raise ConnectionError
-            request_time = time.time()
-            code = self.input(request_time, countdown)
-            self.tr.complete_weblogin(code)
+                try:
+                    for err in json.loads(str(e)):
+                        match err:
+                            case {'errorCode': 'NUMBER_INVALID', 'errorMessage': 'phoneNumber'}:
+                                log.error("Phone number invalid")
+                            case {'errorCode': 'INVALID_VALUE', 'errorMessage': 'pin'}:
+                                log.error("PIN number invalid")
+                            case {"errorCode": "AUTHENTICATION_ERROR"}:
+                                log.error("Authentication error")
+                            case {"errorCode":"VALIDATION_CODE_INVALID"}:
+                                log.error("Validation code invalid")
+                            case {"errorCode": "TOO_MANY_REQUESTS", "meta": {"_meta_type": "RetryMeta", "nextAttemptInSeconds": seconds, "nextAttemptTimestamp": _}}:
+                                ts = datetime.now() + timedelta(seconds=seconds)  # Used instead of 'nextAttemptTimestamp' to use local time zone
+                                log.error(f"Too many requests. Try again in {seconds} seconds at {ts.strftime('%Y-%m-%d %H:%M:%S %Z').rstrip()}.")
+                    raise ConnectionError("Could not connect to Trade Republic server.")
+                except (TypeError, KeyError):
+                    log.error("Invalid credentials or validation code.")
+                    raise ConnectionError("Could not connect to Trade Republic server. Please check credentials and try again.")
 
         log.info('Logged in')
 
@@ -225,6 +241,8 @@ class PyTrPP:
             ).process()
         except ValueError as e:
             parser.error(str(e))
+        except ConnectionError as e:
+            parser.exit(1, str(e))
 
     @classmethod
     def parse(cls, parser=None, argv=None):
