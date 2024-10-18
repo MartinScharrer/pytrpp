@@ -179,13 +179,16 @@ class Timeline:
 
         max_details_digits = len(str(self.num_timeline_details))
         self.log.info(
-            f"{self.received_detail:>{max_details_digits}}/{self.num_timeline_details}: "
-            + f"{event.get('eventType', '')}: {event.get('title', '')} -- {event.get('subtitle', '')}"
+            f"{self.received_detail:>{max_details_digits}}/{self.num_timeline_details}: {self.get_event_info(event)}"
         )
 
         if self.received_detail == self.num_timeline_details:
             self.log.info('Received all details')
             self.done = True
+
+    @staticmethod
+    def get_event_info(event):
+        return f"{event.get('eventType', '')}: {event.get('title', '')} -- {event.get('subtitle', '')}"
 
     async def dl_loop(self):
         await self.get_next_timeline_transactions()
