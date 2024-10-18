@@ -221,7 +221,11 @@ class PyTrPP:
             else:
                 self.logger.info(f"Downloading file {n}/{num}: '{filepath}'")
                 dl(doc_url, fullpath)
-        self.logger.info(f"Downloaded {num - skipped} files. Skipped {skipped} files as they were already present.")
+        ndl = num - skipped
+        if ndl:
+            self.logger.info(f"Downloaded {ndl} files.")
+        if skipped:
+            self.logger.info(f"Skipped {skipped} files as they were already present.")
 
     @classmethod
     def main(cls, argv=None):
