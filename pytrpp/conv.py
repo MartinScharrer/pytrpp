@@ -139,12 +139,12 @@ class TransactionEvent(Event):
             pass
         return transaction
 
-    def get_section(self, event: dict, section_title: str) -> dict | None:
+    def get_section(self, event: dict, *section_titles: tuple[str]) -> dict | None:
         transaction = {}
         try:
             sections = event['details']['sections']
             for section in sections:
-                if section.get('title') == section_title:
+                if section.get('title') in section_titles:
                     section_data = {
                         data['title']: data['detail']['text']
                         for data in section['data']
@@ -272,7 +272,7 @@ class SecuritiesTransferOutgoing(Investment):
     def __init__(self, event: dict):
         self.dt: datetime = get_timestamp(event['timestamp'])
         self.isin: str = self.get_isin(event)
-        overview = self.get_section(event, 'Übersicht')
+        overview = self.get_section(event, 'Übersicht', 'Overview')
         for t in ('Asset', 'Anteil'):
             self.name = overview.get(t)
             if self.name is not None:
@@ -436,6 +436,7 @@ class Converter:
         'SAVINGS_PLAN_INVOICE_CREATED': SavingsPlanExec,
         'ACCOUNT_TRANSFER_INCOMING': AccountTransferIncoming,
         'SECURITIES_TRANSFER_OUTGOING': SecuritiesTransferOutgoing,
+        'ssp_securities_transfer_outgoing': SecuritiesTransferOutgoing,
         'ORDER_EXPIRED': Ignore,
         'ORDER_CANCELED': Ignore,
         'YEAR_END_TAX_REPORT': Ignore,
