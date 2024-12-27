@@ -100,7 +100,7 @@ class Timeline:
             # print(json.dumps(response))
             for event in response['items']:
                 if event['id'] not in self.timeline_events:
-                    if get_timestamp(event['timestamp']) < self.since_timestamp:
+                    if get_timestamp(event['timestamp']) >= self.since_timestamp:
                         event['source'] = "timelineActivity"
                         self.timeline_events[event['id']] = event
                         self.num_timeline_details += 1
