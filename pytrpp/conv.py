@@ -337,6 +337,33 @@ class PaymentOutbound(Payment):
         return f'PaymentOutbound(value={self.value}, dt="{self.dt}"")'
 
 
+
+def SspCorporateActionInvoiceCash(event: dict) -> Event:
+    if event['subtitle'] == 'Vorabpauschale':
+        return Vorabpauschale(event)
+    else:
+        return Dividend(event)
+
+
+class Vorabpauschale(Payment, TransactionEvent):
+    note = 'Vorabpauschale'
+    type = 'Steuern'
+
+    def __init__(self, event: dict):
+        super().__init__(event)
+        self.isin: str = self.get_isin(event)
+        transaction = self.get_transaction(event)
+        # self.shares = transaction.get('Anteile')
+        # self.dividend_per_share = transaction.get('Dividende je Aktie')
+        self.taxes = transaction.get('Steuern', Amount.zero())
+        self.name = event['title']
+
+    def csv(self, sep=';'):
+        s = super().csv(sep).rstrip(f'\n{sep}')
+        return f'{s}{sep}{self.isin}{sep}"{self.name}"{sep}\n'
+
+
+
 class Dividend(Payment, TransactionEvent):
     """Dividend payout"""
     type = 'Dividende'
@@ -346,14 +373,14 @@ class Dividend(Payment, TransactionEvent):
         super().__init__(event)
         self.isin: str = self.get_isin(event)
         transaction = self.get_transaction(event)
-        self.shares = transaction['Anteile']
+        self.shares = transaction.get('Anteile')
         self.dividend_per_share = transaction.get('Dividende je Aktie')
         self.taxes = transaction.get('Steuern', Amount.zero())
         self.name = event['title']
 
     def csv(self, sep=';'):
         s = super().csv(sep).rstrip(f'\n{sep}')
-        return f'{s}{sep}{self.taxes}{sep}{self.isin}{sep}"{self.name}"{sep}{self.shares}\n'
+        return f'{s}{sep}{self.isin}{sep}"{self.name}"{sep}{self.shares}\n'
 
     def __repr__(self):
         return f'{self.__class__.__name__}(value={self.value}, dt="{self.dt}"")'
@@ -453,7 +480,7 @@ class Converter:
         'INCOMING_TRANSFER_DELEGATION': PaymentInbound,
         'OUTGOING_TRANSFER_DELEGATION': PaymentOutbound,
         'CREDIT': Dividend,
-        'ssp_corporate_action_invoice_cash': Dividend,
+        'ssp_corporate_action_invoice_cash': SspCorporateActionInvoiceCash,
         'INTEREST_PAYOUT_CREATED': InterestPayout,
         'INTEREST_PAYOUT': InterestPayout,
         'card_successful_oct': CardOriginalCreditTransaction,
@@ -495,6 +522,7 @@ class Converter:
         'EXEMPTION_ORDER_CHANGED': Ignore,
         'EXEMPTION_ORDER_CHANGE_REQUESTED': Ignore,
         'TAX_REFUND': TaxRefund,
+        'ssp_tax_correction_invoice': TaxRefund,
     }
 
     def convert(self, events: dict, payments_file: None|str|Path, orders_file: None|str|Path):
