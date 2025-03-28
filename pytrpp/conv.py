@@ -36,6 +36,39 @@ class Amount:
     def zero(cls, currency='EUR'):
         return cls(Decimal('0.00'), currency)
 
+    @classmethod
+    def from_text(cls, text: str):
+        CURRENCIES = '€$'
+        WHITESPACE = '  \t'
+        if text == 'Gratis':
+            return cls.zero()
+
+        # Remove currency
+        if text[0] in CURRENCIES:
+            currency = text[0]
+            text = text[1:]
+        elif text[-1] in CURRENCIES:
+            currency = text[-1]
+            text = text[:-1]
+
+        if text[0] in '+-':
+            text = text[1:]
+
+        text = text.strip(WHITESPACE)
+
+        # Adapted from code by savek-cc (https://github.com/MartinScharrer/pytrpp/issues/2):
+        if '.' in text and ',' in text:
+            # Remove any dots (the thousand separators)
+            text = text.replace('.', '')
+            # Replace the comma (decimal separator) with a dot.
+            text = text.replace(',', '.')
+        # If only a comma exists, assume it is the decimal separator.
+        elif ',' in text:
+            text = text.replace(',', '.')
+        # If only a dot exists or no separator exists, assume it's in the correct format.
+        currency = {'€': 'EUR', '$': 'USD'}.get(currency, ascii(currency))
+        return Amount(text, currency)
+
 
 def amount(event: dict) -> Amount | None:
     """Extract amount from event."""
@@ -45,17 +78,6 @@ def amount(event: dict) -> Amount | None:
     except KeyError:
         return None
 
-
-def text_amount(text: str) -> Amount | None:
-    if text == 'Gratis':
-        return Amount.zero()
-    try:
-        value, currency = text.split(" ", 2)
-        value = value.replace('.', '').replace(',', '.').lstrip('+- ')
-    except ValueError:
-        currency, value = text[0], text[1:]
-    currency = {'€': 'EUR', '$': 'USD'}.get(currency, ascii(currency))
-    return Amount(value, currency)
 
 
 class SecurityTransaction:
@@ -120,12 +142,12 @@ class TransactionEvent(Event):
                             if text.lower() == 'kostenlos':
                                 text = Amount.zero()
                             else:
-                                text = text_amount(text)
+                                text = Amount.from_text(text)
                         elif title in ('Aktienkurs', 'Anteilspreis'):
                             title = 'Preis'
-                            text = text_amount(text)
+                            text = Amount.from_text(text)
                         elif title in ('Gesamt', 'Tilgung', 'Coupon Zahlung'):
-                            text = text_amount(text)
+                            text = Amount.from_text(text)
                         elif title in ('Anteile', 'Aktien'):
                             title = 'Anteile'
                             text = Decimal(text.replace(',', '.'))
@@ -265,6 +287,12 @@ class AccountTransferIncoming(Investment):
             self.value = Amount.zero()
 
 
+def securities_transfer_outgoing(event):
+    try:
+        return SecuritiesTransferOutgoing(event)
+    except:
+        return Ignore(event)
+
 class SecuritiesTransferOutgoing(Investment):
     note = 'Ausgehender Wertpapierübertrag'
     type = 'Auslieferung'
@@ -380,7 +408,7 @@ class Dividend(Payment, TransactionEvent):
 
     def csv(self, sep=';'):
         s = super().csv(sep).rstrip(f'\n{sep}')
-        return f'{s}{sep}{self.isin}{sep}"{self.name}"{sep}{self.shares}\n'
+        return f'{s}{sep}{self.isin}{sep}"{self.name}"{sep}{str(self.shares).replace('.', ',')}\n'
 
     def __repr__(self):
         return f'{self.__class__.__name__}(value={self.value}, dt="{self.dt}"")'
@@ -461,9 +489,10 @@ class Converter:
         'TRADE_INVOICE': Order,
         'SAVINGS_PLAN_EXECUTED': SavingsPlanExec,
         'SAVINGS_PLAN_INVOICE_CREATED': SavingsPlanExec,
+        'trading_savingsplan_executed': SavingsPlanExec,
         'ACCOUNT_TRANSFER_INCOMING': AccountTransferIncoming,
-        'SECURITIES_TRANSFER_OUTGOING': SecuritiesTransferOutgoing,
-        'ssp_securities_transfer_outgoing': SecuritiesTransferOutgoing,
+        'SECURITIES_TRANSFER_OUTGOING': securities_transfer_outgoing,
+        'ssp_securities_transfer_outgoing': securities_transfer_outgoing,
         'ORDER_EXPIRED': Ignore,
         'ORDER_CANCELED': Ignore,
         'YEAR_END_TAX_REPORT': Ignore,
@@ -481,6 +510,7 @@ class Converter:
         'OUTGOING_TRANSFER_DELEGATION': PaymentOutbound,
         'CREDIT': Dividend,
         'ssp_corporate_action_invoice_cash': SspCorporateActionInvoiceCash,
+        'ssp_corporate_action_invoice_shares': Ignore,  # Vorabpauschale without payment
         'INTEREST_PAYOUT_CREATED': InterestPayout,
         'INTEREST_PAYOUT': InterestPayout,
         'card_successful_oct': CardOriginalCreditTransaction,
@@ -546,11 +576,14 @@ class Converter:
         data = []
         for event in events:
             func = self.event_types.get(event['eventType'], Unknown)
-            ev = func(event)
-            if isinstance(ev, Unknown):
-                print(f"Unknown event type {event['eventType']}")
-            if not isinstance(ev, Ignore):
-                data.append(func(event))
+            try:
+                ev = func(event)
+                if isinstance(ev, Unknown):
+                    print(f"Unknown event type {event['eventType']}")
+                if not isinstance(ev, Ignore):
+                    data.append(ev)
+            except (AttributeError, IndexError, KeyError, TypeError):
+                print(f"Error while processing event type {event['eventType']}")
         return data
 
 
