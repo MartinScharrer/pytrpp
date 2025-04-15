@@ -27,7 +27,7 @@ setup(
         'pygments',
         'requests_futures',
         'shtab',
-        'websockets>=10.1',
+        'websockets>=12.0',
     ],
     classifiers=[
         "License :: OSI Approved :: MIT License",
