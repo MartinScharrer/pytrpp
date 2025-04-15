@@ -164,7 +164,12 @@ class Timeline:
         process timeline response and request timelines
         '''
         self.received_detail += 1
-        event = self.timeline_events[response['id']]
+        try:
+            event = self.timeline_events[response['id']]
+        except KeyError:
+            self.log.error(f"Received detail for unknown event {response['id']}")
+            self.errors += 1
+            return False
         event['details'] = response
 
         # when all requested timeline events are received request 5 new
