@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-__VERSION__ = '0.4.0'
+__VERSION__ = '0.4.1'
 
 import argparse
 from datetime import datetime, timedelta, timezone
@@ -187,7 +187,14 @@ class PyTrPP:
     @staticmethod
     def filepath(event: dict, doc: dict, dt: datetime, extension: str) -> Path:
         """Return target filepath for given document"""
-        return Path(string.capwords(event['eventType'], '_')) / f"{dt:%Y-%m-%d} - {doc['title']} - {doc['id']}.{extension}"
+
+        # Fix issue with random ID for eventType 'TAX_YEAR_END_REPORT'
+        if event['eventType'].upper() == 'TAX_YEAR_END_REPORT':
+            eid = ""
+        else:
+            eid = f" - {doc['id']}"
+
+        return Path(string.capwords(event['eventType'], '_')) / f"{dt:%Y-%m-%d} - {doc['title']}{eid}.{extension}"
 
     def process_dl(self, events: dict, base_dir: Path, dl: callable):
         base_dir = Path(base_dir)
@@ -206,7 +213,7 @@ class PyTrPP:
                             doc_url = doc['action']['payload']
                             try:
                                 extension = doc_url[:doc_url.index('?')]
-                                extension = extension[extension.rindex('.') + 1:]
+                                extension = extension[extension.rindex('.') + 1:].lower()
                             except ValueError:
                                 extension = 'pdf'
                             filepath = self.filepath(event, doc, dt, extension)

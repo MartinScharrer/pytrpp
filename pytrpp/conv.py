@@ -553,6 +553,7 @@ class Converter:
         'EXEMPTION_ORDER_CHANGE_REQUESTED': Ignore,
         'TAX_REFUND': TaxRefund,
         'ssp_tax_correction_invoice': TaxRefund,
+        'TAX_YEAR_END_REPORT': Ignore,
     }
 
     def convert(self, events: dict, payments_file: None|str|Path, orders_file: None|str|Path):
