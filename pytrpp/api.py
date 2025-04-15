@@ -262,7 +262,7 @@ class TradeRepublicApi:
         return self._default_headers_web if self._weblogin else self._default_headers
 
     async def _get_ws(self):
-        if self._ws and self._ws.open:
+        if self._ws:
             return self._ws
 
         self.log.info('Connecting to websocket ...')
