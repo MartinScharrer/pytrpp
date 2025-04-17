@@ -208,7 +208,7 @@ class PyTrPP:
                         for doc in section['data']:
                             try:
                                 dt = datetime.strptime(doc['detail'], '%d.%m.%Y')
-                            except (ValueError, KeyError):
+                            except (ValueError, KeyError, TypeError):
                                 dt = get_timestamp(event['timestamp'])
                             doc_url = doc['action']['payload']
                             try:
