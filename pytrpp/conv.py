@@ -554,6 +554,9 @@ class Converter:
         'TAX_REFUND': TaxRefund,
         'ssp_tax_correction_invoice': TaxRefund,
         'TAX_YEAR_END_REPORT': Ignore,
+        # Others
+        'EX_POST_COST_REPORT_CREATED': Ignore,
+        'timeline_legacy_migrated_events': Ignore,
     }
 
     def convert(self, events: dict, payments_file: None|str|Path, orders_file: None|str|Path):

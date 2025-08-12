@@ -97,7 +97,7 @@ class TradeRepublicApi:
                     lines = f.readlines()
                 self.phone_no = lines[0].strip()
                 self.pin = lines[1].strip()
-            except FileNotFoundError:
+            except (FileNotFoundError, IndexError):
                 raise ValueError(f'phone_no and pin must be specified explicitly or via {self._credentials_file}')
         else:
             self.phone_no = phone_no
